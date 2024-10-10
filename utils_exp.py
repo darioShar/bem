@@ -351,7 +351,6 @@ class InitUtils:
         # get generation manager
         kwargs = p['eval'][p['method']]# here kwargs is passed to the underlying Generation Manager.
         gen_manager = GenerationManager(method, 
-                                    #reverse_steps=p['eval'][p['method']]['reverse_steps'], 
                                     dataloader=data, 
                                     is_image = is_image_dataset(p['data']['dataset']),
                                     **kwargs)
