@@ -23,9 +23,10 @@ def match_last_dims(data, size):
     # Unsqueeze to add singleton dimensions for expansion
     for _ in range(len(size) - 1):
         data = data.unsqueeze(-1)
-    
+    size = torch.tensor(size)
+    size[0] = data.shape[0]
     # Use expand instead of repeat to save memory
-    return data.expand(*size).contiguous()
+    return data.expand(*size)
 
 ''' Generate fat tail distributions'''
 # assumes it is a batch size
