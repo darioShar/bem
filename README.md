@@ -6,18 +6,31 @@ This repository provides a unique framework to experiment with different deep ge
 * Evaluate them
 * Compare them
 
+See for instance projects [DLPM](https://github.com/darioShar/DLPM) and [Generative PDMPs](https://github.com/darioShar/PDMP) using this framework.
+
 # How to use
 
-## Config file
+## Configuration
 
-The framework uses a YAML configuration file to manage experiment parameters. This file defines the datasets, models, training parameters, evaluation settings, and more.
+The framework requires defining a dictionnary `p` containing the following subdictionnaries:
 
-### Structure
+- `method`: Specifies the generative method (e.g., `ddpm`, `gan`, `vae`, ...).
+- `data`: Dataset configurations.
+- `model`: Model-specific parameters.
+- `training`: Training parameters for the specified method.
+- `optim`: Optimizer and learning rate scheduler settings.
+- `eval`: Evaluation settings and method-specific evaluation parameters.
+- `run`: Parameters for a specific run.
+
+
+### Configuration file
+
+The framework can use a YAML configuration file to manage experiment parameters, retreiving the associated dictionnary with the `bem.utils_exp.FileHandler.get_param_from_config` function.
 
 An example configuration file (`config.yaml`) might look like:
 
 ```yaml
-seed: 42
+seed: 42 # or null
 
 method: ddpm
 
@@ -58,17 +71,7 @@ run:
   checkpoint_freq: 250
   ...
 
-
 ```
-
-**Sections:**
-
-- `method`: Specifies the generative method (e.g., `ddpm`, `gan`, `vae`, ...).
-- `data`: Dataset configurations.
-- `model`: Model-specific parameters.
-- `training`: Training parameters for the specified method.
-- `optim`: Optimizer and learning rate scheduler settings.
-- `eval`: Evaluation settings and method-specific evaluation parameters.
 
 
 ## Functions to define
