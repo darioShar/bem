@@ -127,13 +127,13 @@ Here’s how to set up and run a default experiment with DDPM.
      dataset: mnist
    model:
      ddpm:
-       num_layers: 10
+       num_channels: 32
        hidden_dim: 128
        ...
    training:
+     batch_size: 64
+     num_workers: 4
      ddpm:
-       batch_size: 64
-       num_workers: 4
        epochs: 100
        grad_clip: 1.0
    optim:
@@ -175,8 +175,8 @@ Here’s how to set up and run a default experiment with DDPM.
 3. **Run the Experiment**
 
    ```python
-   from BEM.Experiments import Experiment
-   from BEM.utils_exp import ExpUtils
+   from Experiments import Experiment
+   from utils_exp import ExpUtils
 
    # Load parameters from the config file
    p = ExpUtils.get_param_from_config('./configs', 'config_ddpm.yaml')
