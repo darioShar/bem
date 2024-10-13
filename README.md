@@ -517,14 +517,16 @@ To add support for a new dataset:
 
 
 
-# Misc
+<!-- # Misc
 
 - **Flexibility**: The framework is designed to be flexible, allowing easy integration of custom models and methods.
 - **Modularity**: Components like data handling, training, evaluation, and logging are modular.
 - **Extensibility**: By implementing the required functions, you can extend the framework to support new generative models.
 - **Device Support**: Detects and utilizes available hardware (CPU, GPU, MPS).
-- **Reproducibility**: Experiment parameters are hashed to ensure reproducibility and organized storage.
+- **Reproducibility**: Experiment parameters are hashed to ensure reproducibility and organized storage. -->
 
-**Contributing**: Contributions are welcome! Please submit issues or pull requests for bugs, features, or improvements.
+
+# Contributing
+Contributions are welcome! Please submit issues or pull requests for bugs, features, or improvements.
 
 
