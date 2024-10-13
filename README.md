@@ -23,22 +23,27 @@ method: ddpm
 
 data:
   dataset: mnist
+  ...
+
 model:
   ddpm:
     num_layers: 10
     hidden_dim: 128
     ...
+
 training:
+  batch_size: 256
+  num_workers: 2
   ddpm:
-    batch_size: 64
-    num_workers: 4
     epochs: 100
     grad_clip: 1.0
+    ...
+
 optim:
   lr: 0.0001
-  schedule: cosine
-  warmup: 5000
-  lr_steps: 100000
+  schedule: steplr
+  ...
+
 eval:
   data_to_generate: 1000
   real_data: 1000
@@ -46,6 +51,14 @@ eval:
   ddpm:
     timesteps: 1000
     ...
+
+run:
+  epochs: 1000
+  eval_freq: 250
+  checkpoint_freq: 250
+  ...
+
+
 ```
 
 **Sections:**
