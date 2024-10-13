@@ -125,7 +125,6 @@ Here’s how to set up and run a default experiment with DDPM.
    method: ddpm
    data:
      dataset: mnist
-     data_path: ./data/mnist
    model:
      ddpm:
        num_layers: 10
