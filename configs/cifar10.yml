@@ -1,0 +1,72 @@
+seed: null
+
+data:
+  dataset: cifar10  #tinyimagenet, celeba, celebahq, etc.
+  channels: 3
+  image_size: 32
+  random_flip: true
+  #num_classes: 10
+
+
+method: ... # your_method_0, your_method_1, your_method_2, etc.
+
+
+your_method_0:
+  ...
+
+your_method_1:
+  ...
+
+your_method_2:
+  ...
+
+
+eval:
+  data_to_generate: 10000
+  batch_size: 4096
+  real_data: 10000 # in case of images, number of real images to store and to compare to
+
+  your_method_0:
+  ...
+
+  your_method_1:
+    ...
+
+  your_method_2:
+    ...
+
+
+model:
+  ...
+
+
+training:
+  batch_size: 2500
+  num_workers: 0
+
+  your_method_0:
+    ema_rates:
+    - 0.9
+    grad_clip: null #1.0
+
+  your_method_1:
+    ...
+
+  your_method_2:
+    ...
+  
+  
+optim:
+  optimizer: adamw
+  schedule: steplr #steplr
+  lr: 0.0002
+  warmup: 500 #100
+  lr_steps: 300000
+  lr_step_size: 1000
+  lr_gamma: 0.99
+
+run:
+  epochs: 400 #10000
+  eval_freq: null
+  checkpoint_freq: 50
+  progress: true # print progress bar

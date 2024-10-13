@@ -1,0 +1,85 @@
+seed: null
+
+data:
+  dataset: gmm_grid     # sas_grid
+  isotropic: true
+  n_mixture: 9          # must be square. set to None if not a grid mixture
+  nfeatures: 2          
+  dim: 2                # if data_type is 2d and this is one, will just project on first dimension
+  normalized: false
+  nsamples: 25000
+  std: 0.1
+  weights:
+  - 0.01
+  - 0.1
+  - 0.3
+  - 0.2
+  - 0.02
+  - 0.15
+  - 0.02
+  - 0.15
+  - 0.05
+
+method: ... # your_method_0, your_method_1, your_method_2, etc.
+
+
+your_method_0:
+  ...
+
+your_method_1:
+  ...
+
+your_method_2:
+  ...
+
+
+eval:
+  data_to_generate: 10000
+  batch_size: 4096
+  real_data: 10000 # in case of images, number of real images to store and to compare to
+
+  your_method_0:
+  ...
+
+  your_method_1:
+    ...
+
+  your_method_2:
+    ...
+
+
+model:
+  ...
+
+
+training:
+  batch_size: 2500
+  num_workers: 0
+
+  your_method_0:
+    ema_rates:
+    - 0.9
+    grad_clip: null #1.0
+
+  your_method_1:
+    ...
+
+  your_method_2:
+    ...
+  
+
+optim:
+  optimizer: adamw
+  schedule: null # linear, steplr
+  lr: 0.005
+  warmup: 0 #1000
+  lr_steps: 2000
+  lr_step_size: 400
+  lr_gamma: 0.99
+
+
+run:
+  epochs: 200
+  eval_freq: 50
+  checkpoint_freq: 50
+  progress: false # print progress bar
