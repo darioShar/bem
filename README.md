@@ -393,7 +393,7 @@ The framework will search for checkpoint files matching the provided parameters 
 The framework provides tools to retrieve and visualize experiment results.
 
 - All results, metrics, and plots are stored in the specified checkpoint directory.
-- Use the `GenerationManager` to load and visualize results.
+- Use the `Experiment`, `GenerationManager` classes to load and visualize results.
 
 
 
