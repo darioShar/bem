@@ -10,6 +10,8 @@ See for instance projects [DLPM](https://github.com/darioShar/DLPM) and [Generat
 
 # How to use
 
+You can find example configuration files in the `config` folder, and example scripts for running, evaluating and displaying generative models in the `scripts` folder.
+
 ## Configuration
 
 The framework requires defining a dictionnary `p` containing the following subdictionnaries:
