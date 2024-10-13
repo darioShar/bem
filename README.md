@@ -1,12 +1,14 @@
 # BEM: Better Experimentation Manager (for generative models)
 
-This repository provides a unique framework to experiment with different deep generative models, making it easier to:
+This repository provides a framework to experiment with different deep generative models, making it easier to train them, evaluate them, compare them. BEM is designed to satisfy the following properties:
 
-* Train them
-* Evaluate them
-* Compare them
+- **Flexibility**: Allows easy integration of custom models and methods.
+- **Modularity**: Components like data handling, training, evaluation, and logging are modular.
+- **Extensibility**: By implementing the required functions, you can support your own generative models.
+- **Reproducibility**: Experiment parameters are hashed to ensure reproducibility and organized storage.
+- **Device Support**: Utilizes available hardware (CPU, CUDA, MPS).
 
-See for instance projects [DLPM](https://github.com/darioShar/DLPM) and [Generative PDMPs](https://github.com/darioShar/PDMP) using this framework.
+See projects [DLPM](https://github.com/darioShar/DLPM) and [Generative PDMPs](https://github.com/darioShar/PDMP) that use this framework.
 
 # How to use
 
