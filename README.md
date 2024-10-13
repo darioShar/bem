@@ -137,7 +137,7 @@ Here’s how to set up and run a default experiment with DDPM.
        grad_clip: 1.0
    optim:
      lr: 0.0001
-     schedule: cosine
+     schedule: steplr
      warmup: 5000
    eval:
      data_to_generate: 1000
@@ -217,28 +217,10 @@ The framework uses an abstract `Logger` class (`Logger.py`) to handle logging. Y
 - `log(self, data_type, data)`: Log data (e.g., losses, metrics).
 - `stop(self)`: Flush and stop the logger.
 
-**Example Implementation:**
-
-```python
-class CustomLogger(Logger):
-    def initialize(self, p):
-        # Initialize logging (e.g., open files, start sessions)
-        pass
-
-    def set_values(self, value_dict):
-        # Set initial values or states
-        pass
-
-    def log(self, data_type, data):
-        # Log data (e.g., write to console or file)
-        print(f"{data_type}: {data}")
-
-    def stop(self):
-        # Clean up resources
-        pass
-```
 
 **Using the Logger:**
+
+Pass it as an argument to the `Experiment` class.
 
 ```python
 logger = CustomLogger()
@@ -253,11 +235,7 @@ exp = Experiment(
 )
 ```
 
-## Scripts
-
-*To Do*: Scripts for automating experiments, training, and evaluation are forthcoming.
-
-# General structure and prescribed behaviour
+# General structure and behaviour
 
 ## Training
 
@@ -269,16 +247,7 @@ Training is handled by the `TrainingManager` class (`TrainingManager.py`). It ma
 - **EMA Updates**: Updates Exponential Moving Averages if EMA is used.
 - **Callbacks**: Supports batch and epoch callbacks for logging or other purposes.
 
-**Example Training Loop:**
-
-```python
-exp.manager.train(
-    total_epoch=100,
-    eval_freq=10,
-    checkpoint_freq=10,
-    grad_clip=1.0
-)
-```
+It is called in the `run` procedure of the `Experiment` class.
 
 ## Evaluation
 
@@ -291,19 +260,10 @@ Evaluation is managed by the `EvaluationManager` class (`EvaluationManager.py`).
 
 Evaluation can be performed periodically during training or after training completes.
 
-**Perform Evaluation:**
-
-```python
-# Evaluate the current model
-exp.manager.evaluate()
-
-# Evaluate EMA models if used
-exp.manager.evaluate(evaluate_emas=True)
-```
 
 ## Storing/Checkpointing
 
-Experiments can be saved and loaded using the `save` and `load` methods in the `Experiment` class. Checkpoints include:
+Experiments are saved and loaded using the `save` and `load` methods in the `Experiment` class. Checkpoints include:
 
 - Model parameters
 - Optimizer states
@@ -431,35 +391,8 @@ The framework will search for checkpoint files matching the provided parameters 
 
 The framework provides tools to retrieve and visualize experiment results.
 
-**Display Evaluation Metrics:**
-
-```python
-# Display losses
-exp.manager.display_evals(key='losses', log_scale=True)
-```
-
-**Generate and Visualize Samples:**
-
-```python
-# Generate samples and display plots
-exp.manager.display_plots(
-    ema_mu=0.999,  # Use EMA model with mu=0.999
-    title='Generated Samples',
-    nb_datapoints=10000,
-    plot_original_data=True
-)
-```
-
-**Retrieve Experiment Results:**
-
 - All results, metrics, and plots are stored in the specified checkpoint directory.
-- Use the `EvaluationManager` and `GenerationManager` to load and visualize results.
-
-
-
-
-
-
+- Use the `GenerationManager` to load and visualize results.
 
 
 
@@ -493,17 +426,6 @@ The framework supports both image and synthetic datasets, which are managed thro
 - **olympic_rings**
 - **checkerboard**
 
-Specify the dataset in the `data` section:
-
-```yaml
-data:
-  dataset: swiss_roll
-  nsamples: 10000
-  dim: 2
-  n_mixture: 8
-  std: 0.1
-  normalized: True
-```
 
 **Dataset Loading and Transformation:**
 
@@ -594,19 +516,14 @@ To add support for a new dataset:
 
 
 
-
-
 # Misc
 
 - **Flexibility**: The framework is designed to be flexible, allowing easy integration of custom models and methods.
 - **Modularity**: Components like data handling, training, evaluation, and logging are modular.
 - **Extensibility**: By implementing the required functions, you can extend the framework to support new generative models.
-- **Device Support**: Automatically detects and utilizes available hardware (CPU, GPU, MPS).
+- **Device Support**: Detects and utilizes available hardware (CPU, GPU, MPS).
 - **Reproducibility**: Experiment parameters are hashed to ensure reproducibility and organized storage.
 
 **Contributing**: Contributions are welcome! Please submit issues or pull requests for bugs, features, or improvements.
-
-**License**: This project is licensed under the MIT License.
-
 
 
