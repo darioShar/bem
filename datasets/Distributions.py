@@ -19,14 +19,13 @@ def match_last_dims(data, size):
     """
     # Ensure data is 1-dimensional
     assert data.dim() == 1, f"Data must be 1-dimensional, got {data.size()}"
-    
+
     # Unsqueeze to add singleton dimensions for expansion
     for _ in range(len(size) - 1):
         data = data.unsqueeze(-1)
-    size = torch.tensor(size)
-    size[0] = data.shape[0]
+    
     # Use expand instead of repeat to save memory
-    return data.expand(*size)
+    return data.expand(*size).contiguous()
 
 ''' Generate fat tail distributions'''
 # assumes it is a batch size
@@ -218,6 +217,10 @@ def sample_grid_sas(n_samples,
             s = int(idx[i*n + j])
             e = int(idx[i*n + j + 1])
             data[s:e] = data[s:e] + torch.tensor([i, j])
+
+    # center the data such that the center of the grid is at 0
+    data = data - torch.tensor([n/2, n/2])
+    
 
     if normalize:
         data = (data - data.mean()) / data.std()

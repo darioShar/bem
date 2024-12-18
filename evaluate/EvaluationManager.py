@@ -20,6 +20,15 @@ def check_dict_eq(dic1, dic2):
             if v != dic2[k]:
                 return False
     return True
+
+def compute_gradient_norm(model):
+    total_norm = 0.0
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm ** 0.5
+    return total_norm
 class EvaluationManager:
 
     def __init__(self,
@@ -66,6 +75,7 @@ class EvaluationManager:
             'f_1_dc': self.evals['f_1_dc'] if keep_evals else [],
             'fid': self.evals['fid'] if keep_evals else [],
             'fig': self.evals['fig'] if keep_evals else [],
+            'grad_norm': self.evals['grad_norm'] if keep_evals else np.array([], dtype = np.float32),
         }
     
     #def save(self, eval_path):
@@ -85,7 +95,12 @@ class EvaluationManager:
     def register_epoch_loss(self, epoch_loss):
         self.evals['losses'] = np.append(self.evals['losses'], epoch_loss)
         if self.logger is not None:
-            self.logger.log('losses', epoch_loss)
+            self.logger.log('losses', self.evals['losses'][-1])
+
+    def register_grad_norm(self, models):
+        self.evals['grad_norm'] = np.append(self.evals['grad_norm'], compute_gradient_norm(models['default']))
+        if self.logger is not None:
+            self.logger.log('grad_norm', self.evals['grad_norm'][-1])
 
     # uses default parameters for generation. Return generation manager
     def generate_default(self, models, nsamples, **kwargs):
@@ -117,7 +132,7 @@ class EvaluationManager:
             #self.gen_model.generate(data_to_generate, 
             #                print_progression= True,
             #                **kwargs)
-            self.gen_manager.generate(models, data_to_generate, print_progression=False, **kwargs)
+            self.gen_manager.generate(models, data_to_generate, **kwargs)
             
             # prepare data.
             gen_samples = self.gen_manager.samples
@@ -167,7 +182,6 @@ class EvaluationManager:
                     print(remaining, end = ' ')
                     self.gen_manager.generate(models,
                                          min(batch_size, remaining),
-                                         print_progression= True,
                                          **kwargs)
                     # save data to file. We do that rather than concatenating to save on memory, 
                     # but really it is because I want to inspect the images while they are generated
@@ -187,7 +201,7 @@ class EvaluationManager:
                                             self.gen_data_path, 
                                             128, # batch size
                                             self.method.device, 
-                                            num_workers= 4 if self.is_image else 0)
+                                            num_workers= 2 if self.is_image else 0)
             print(eval_results['fid'])
             print('prdc')
             # precision, recall density, coverage
@@ -195,7 +209,7 @@ class EvaluationManager:
                             self.gen_data_path, 
                             128, # batch size 
                             self.method.device, 
-                            num_workers= 4 if self.is_image else 0,
+                            num_workers= 2 if self.is_image else 0,
                             max_num_files=data_to_generate if data_to_generate != 0 else None) # None means read whole image directory, which should be full from a previous run
         
         for k, v in prdc_value.items():

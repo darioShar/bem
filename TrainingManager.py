@@ -63,8 +63,9 @@ class TrainingManager:
         tmp_kwargs = copy.deepcopy(self.kwargs)
         tmp_kwargs.update(kwargs)
 
-        def epoch_callback(epoch_loss):
+        def epoch_callback(epoch_loss, models):
             self.eval.register_epoch_loss(epoch_loss)
+            self.eval.register_grad_norm(models)
             if self.logger is not None:
                 self.logger.log('current_epoch', self.epochs)
         
@@ -140,7 +141,7 @@ class TrainingManager:
             print('epoch_loss', epoch_loss)
             self.epochs += 1
             if epoch_callback is not None:
-                epoch_callback(epoch_loss)
+                epoch_callback(epoch_loss,models=self.models)
 
             print('Done training epoch {}/{}'.format(self.epochs, total_epochs))
 
@@ -293,7 +294,7 @@ class TrainingManager:
         eval_save = torch.load(eval_path)
         assert 'eval' in eval_save, 'no eval subdict in eval file'
         # load eval metrics
-        self.eval.evals = eval_save['eval']
+        self.eval.evals.update(eval_save['eval'])
         self.eval.log_existing_eval_values(folder='eval')
 
         # load ema eval metrics
@@ -312,7 +313,7 @@ class TrainingManager:
             # find index of our mu of interest
             idx = saved_mus.index(ema_obj['default'].mu)
             # load the saved evaluation
-            ema_obj['eval'].evals = saved_ema_evals[idx]
+            ema_obj['eval'].evals.update(saved_ema_evals[idx])
             # log the saved evaluation
             ema_obj['eval'].log_existing_eval_values(folder='eval_ema_{}'.format(ema_obj['default'].mu))
     
