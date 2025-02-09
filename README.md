@@ -1,14 +1,14 @@
-# BEM: Better Experimentation Manager (for generative models)
+# BEM: Better Experimentation Manager for deep learning with Pytorch
 
-This repository provides a framework to experiment with different deep generative models, making it easier to train them, evaluate them, compare them. BEM is designed to satisfy the following properties:
+This repository provides a framework to experiment with different deep learning models with Pytorch, streamlining training, evaluation, and generation (for generative models). BEM is designed to satisfy the following properties:
 
 - **Flexibility**: Allows easy integration of custom models and methods.
 - **Modularity**: Components like data handling, training, evaluation, and logging are modular.
 - **Extensibility**: By implementing the required functions, you can support your own generative models.
-- **Reproducibility**: Experiment parameters are hashed to ensure reproducibility and organized storage.
+- **Reproducibility**: Saving experiment parameters and metrics to ensure reproducibility and organized storage.
 - **Device Support**: Utilizes available hardware (CPU, CUDA, MPS).
 
-See projects [DLPM](https://github.com/darioShar/DLPM) and [Generative PDMPs](https://github.com/darioShar/PDMP) that use this framework.
+See projects [DLPM](https://github.com/darioShar/DLPM) and [Generative PDMPs](https://github.com/darioShar/PDMP) using this framework.
 
 # How to use
 
