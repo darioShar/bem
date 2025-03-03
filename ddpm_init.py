@@ -15,7 +15,7 @@ import torch.optim as optim
 from transformers import get_scheduler
 
 ''' at any point during the program execution, will give information about the current dataset being used '''
-from manage.data import CurrentDatasetInfo, Modality, StateSpace
+from data.data import CurrentDatasetInfo, Modality, StateSpace
 
 
 ''' This function should return an object which implements the following functions:

@@ -78,21 +78,25 @@ class FileHandler:
         
         h = self.exp_name(p)
         save_folder_path = os.path.join(folder_path, p['data']['dataset'])
+        # limit the length of the path to 255 characters
+        save_folder_path = save_folder_path[:255]
         if make_new_dir:
             Path(save_folder_path).mkdir(parents=True, exist_ok=True)
         return save_folder_path, h
 
     # returns eval folder given save folder, and eval hash
     def get_eval_path_from_param(self, 
-                                      p,
+                                p,
                                 save_folder_path, 
                                 make_new_dir = False):
         h = self.exp_name(p)
         h_eval = self.eval_name(p)
         eval_folder_path = os.path.join(save_folder_path, '_'.join(('new_eval', h, h_eval)))
+        # limit the length of the path to 255 characters
+        eval_folder_path = eval_folder_path[:255]
         if make_new_dir:
             Path(eval_folder_path).mkdir(parents=True, exist_ok=True)
-        return eval_folder_path, h, h_eval
+        return eval_folder_path, h_eval
 
     # returns paths for model and param
     # from a base folder. base/data_distribution/
@@ -106,7 +110,7 @@ class FileHandler:
                             ): # saves eval and param in a new subfolder
         save_folder_path, h = self.get_exp_path_from_param(p, folder_path, make_new_dir)
         if new_eval_subdir:
-            eval_folder_path, h, h_eval = self.get_eval_path_from_param(p, save_folder_path, make_new_dir)
+            eval_folder_path, h_eval = self.get_eval_path_from_param(p, save_folder_path, make_new_dir)
 
         names = ['model', 'parameters', 'eval']
         # create path for each name
@@ -143,9 +147,9 @@ class FileHandler:
         # then depending on save_new_eval, save either in save_folder or eval_folder
         if new_eval_subdir:
             if curr_epoch is not None:
-                L.update({name: '_'.join([os.path.join(eval_folder_path, name), h, h_eval, str(curr_epoch)]) for name in names[1:]})
+                L.update({name: '_'.join([os.path.join(eval_folder_path, name), h_eval, str(curr_epoch)]) for name in names[1:]})
             else:
-                L.update({name: '_'.join([os.path.join(eval_folder_path, name), h, h_eval]) for name in names[1:]})
+                L.update({name: '_'.join([os.path.join(eval_folder_path, name), h_eval]) for name in names[1:]})
         else:
             # we consider the evaluation to be made all along the epochs, in order to get a list of evaluations.s
             # so we do not append curr_epoch here. 

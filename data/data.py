@@ -3,18 +3,18 @@ import torch
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as F
 from torchvision.datasets import CIFAR10, CelebA, MNIST, ImageNet, ImageFolder
-from datasets.tinyimagenet import TinyImageNetDataset
+from .datasets.tinyimagenet import TinyImageNetDataset
 from torch.utils.data import TensorDataset
-from datasets.lsun import LSUN
+from .datasets.lsun import LSUN
 import torch.utils.data
 from torch.utils.data import Subset, Dataset
 import pickle
 from PIL import Image
 from torch.utils.data import DataLoader
 
-from datasets.custom_distributions import CustomDistributionDataset
-from datasets.png_to_2d_dataset import get_dataset_from_png, check_png_dataset_exists
-from datasets.img_datasets import get_img_dataset
+from .datasets.custom_distributions import CustomDistributionDataset
+from .datasets.png_to_2d_dataset import get_dataset_from_png, check_png_dataset_exists
+from .datasets.img_datasets import get_img_dataset
 
 
 class Modality:

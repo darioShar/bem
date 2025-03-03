@@ -3,7 +3,7 @@ import torch
 def compute_kl_div_and_hellinger(data, gen_samples):
     # compute kl divergence and hellinger distance
     # generate all unique bits values
-    d = data.shape[1]
+    d = data.shape[-1]
     bit_values = [bin(i)[2:].zfill(d) for i in range(2**d)]
     # convert value to tensor
     tensor_bit_values = torch.stack([torch.tensor([int(v) for v in value]) for value in bit_values])
@@ -16,11 +16,11 @@ def compute_kl_div_and_hellinger(data, gen_samples):
     for i, value in enumerate(tensor_bit_values):
         data_count = 0
         model_count = 0
-        val_mask_data = (data_values == value).all(dim=1)
+        val_mask_data = (data_values == value).all(dim=list(range(1, len(data_values.shape))))
         if val_mask_data.any():
             data_count = data_counts[val_mask_data].item()
 
-        val_mask_model = (model_values == value).all(dim=1)
+        val_mask_model = (model_values == value).all(dim=list(range(1, len(data_values.shape))))
         if val_mask_model.any():
             model_count = model_counts[val_mask_model].item()
         p_data[i] = data_count

@@ -21,7 +21,7 @@ def compute_sliced_wasserstein(
     data = data.float().cpu()
     model_data = model_data.float().cpu()
 
-    N, d = data.shape
+    N, c, d = data.shape
     
     # Container for distances across projections
     sw_values = []

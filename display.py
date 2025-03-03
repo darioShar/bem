@@ -2,7 +2,7 @@ from torch.utils.data import DataLoader
 import os
 
 from manage.files import FileHandler
-from manage.data import get_dataset, CurrentDatasetInfo, Modality, StateSpace
+from data.data import get_dataset, CurrentDatasetInfo, Modality, StateSpace
 from manage.logger import Logger
 from manage.generation import GenerationManager
 from manage.training import TrainingManager

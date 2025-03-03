@@ -212,11 +212,13 @@ class EvaluationManager:
                     eval_results['kl_div'] = 0.
                     eval_results['hellinger'] = 0.
                 else:
+                    print('kl_div and hellinger')
                     kl_div, hellinger = compute_kl_div_and_hellinger(data, gen_samples)
                     eval_results['kl_div'] = kl_div
                     eval_results['hellinger'] = hellinger
                 
                 # sliced wasserstein
+                print('sliced_wass')
                 sliced_wass = compute_sliced_wasserstein(data, gen_samples, n_projections=1000)
                 eval_results['sliced_wass'] = sliced_wass
             

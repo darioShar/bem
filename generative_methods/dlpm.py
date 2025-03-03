@@ -1,5 +1,5 @@
 import torch
-from datasets.custom_distributions import CustomDistributionDataset
+from data.datasets.custom_distributions import CustomDistributionDataset
 
 
 ### TO REIMPLEMENT
