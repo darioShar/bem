@@ -7,7 +7,6 @@ from manage.logger import Logger
 from manage.generation import GenerationManager
 from manage.training import TrainingManager
 from evaluate.EvaluationManager import EvaluationManager
-from datasets import get_dataset
 from manage.checkpoints import load_experiment, save_experiment
 from manage.setup import _get_device, _optimize_gpu, _set_seed
 

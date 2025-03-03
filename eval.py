@@ -7,7 +7,6 @@ from manage.logger import Logger
 from manage.generation import GenerationManager
 from manage.training import TrainingManager
 from evaluate.EvaluationManager import EvaluationManager
-from datasets import get_dataset
 from manage.checkpoints import load_experiment, save_experiment
 from manage.setup import _get_device, _optimize_gpu, _set_seed
 
@@ -65,14 +64,24 @@ def eval_exp(config_path):
     
     for epoch in range(args.eval, args.epochs + 1, args.eval):
         print('Evaluating model at epoch {}'.format(epoch))
-        load_experiment(checkpoint_epoch=epoch)
+        load_experiment(
+                p=p,
+                trainer=trainer,
+                fh = file_handler,
+                save_dir=save_dir,
+                checkpoint_epoch=epoch
+                )
         # evalute ema models
         trainer.evaluate(evaluate_emas=False)
         trainer.evaluate(evaluate_emas=True)
-        paths = save_experiment(save_dir = save_dir,
-                            files=['eval', 'param'], 
-                            new_eval_subdir=True, 
-                            checkpoint_epoch=epoch)
+        paths = save_experiment(
+            p=p,
+            trainer = trainer,
+            fh = file_handler,
+            save_dir = save_dir,
+            files=['eval', 'param'], 
+            new_eval_subdir=True, 
+            checkpoint_epoch=epoch)
         print('Saved (model, eval, param) in ', paths)
     
     # terminates logger 

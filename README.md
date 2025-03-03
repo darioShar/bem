@@ -8,8 +8,6 @@ This repository provides a framework to experiment with different deep learning 
 - **Reproducibility**: Saving experiment parameters and metrics to ensure reproducibility and organized storage.
 - **Device Support**: Utilizes available hardware (CPU, CUDA, MPS).
 
-See projects [DLPM](https://github.com/darioShar/DLPM) and [Generative PDMPs](https://github.com/darioShar/PDMP) using this framework.
-
 
 This repo provides a unique framework to experiment with different deep generative models, making it vastly easier to:
 * Train them

@@ -3,7 +3,7 @@ seed: null
 data:
   dataset: gmm_grid     # gaussian mixture grid
   d: 2                  # data dimension
-  alpha: 2.0
+  alpha: 2.0            
   isotropic: true
   n: 3                  # n*n mixture components
   
