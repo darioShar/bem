@@ -2,24 +2,15 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import copy
+import os 
 
 from .fid_score import fid_score, prdc
 import torchvision.utils as tvu
-from .wasserstein import compute_wasserstein_distance
+from .wasserstein import compute_wasserstein_distance, compute_sliced_wasserstein
 from .prd_legacy import compute_precision_recall_curve, compute_f_beta
 from .mmd_loss import MMD_loss
-
-def check_dict_eq(dic1, dic2):
-    for k, v in dic1.items():
-        if isinstance(v, dict):
-            check_dict_eq(v, dic2[k])
-        elif isinstance(v, torch.Tensor):
-            if (v != dic2[k]).any():
-                return False
-        else:
-            if v != dic2[k]:
-                return False
-    return True
+from .discrete_losses import compute_kl_div_and_hellinger
+from .msle import get_msle_empirical
 
 def compute_gradient_norm(model):
     total_norm = 0.0
@@ -29,6 +20,39 @@ def compute_gradient_norm(model):
             total_norm += param_norm.item() ** 2
     total_norm = total_norm ** 0.5
     return total_norm
+
+
+def generate_and_save_data(gen_manager, 
+                           gen_data_path,
+                           data_to_generate,
+                           models, 
+                           batch_size,
+                            **kwargs
+                           ):
+    # generate more data if necessary
+    #data_to_gen_wass : really is the batch size now. We use some approximation.
+    remaining = data_to_generate
+    print('generating {} images for fid computation'.format(remaining))
+    total_generated_data = 0
+    while remaining > 0:
+        print(remaining, end = ' ')
+        gen_manager.generate(models,
+                                min(batch_size, remaining),
+                                **kwargs)
+        # save data to file. We do that rather than concatenating to save on memory, 
+        # but really it is because I want to inspect the images while they are generated
+        print('saving {} generated images'.format(gen_manager.samples.shape[0]))
+        for i in range(gen_manager.samples.shape[0]):
+            tvu.save_image(gen_manager.samples[i].float(), os.path.join(gen_data_path, f"{i+total_generated_data}.png"))
+        total_generated_data += gen_manager.samples.shape[0]
+        #gen_samples = torch.cat((gen_samples, gen_model.samples), dim = 0)
+        remaining = remaining - gen_manager.samples.shape[0]
+        
+    assert data_to_generate == total_generated_data
+    print('saved generated data in {}.'.format(gen_data_path))
+
+
+
 class EvaluationManager:
 
     def __init__(self,
@@ -37,7 +61,8 @@ class EvaluationManager:
                  dataloader,
                  verbose = True,
                  logger = None,
-                 is_image = False,
+                 modality = None,
+                 state_space = None,
                  gen_data_path = None,
                  real_data_path = None,
                  **kwargs):
@@ -47,7 +72,8 @@ class EvaluationManager:
         self.dataloader = dataloader
         self.verbose = verbose
         self.logger = logger
-        self.is_image = is_image
+        self.modality = modality
+        self.state_space = state_space
         self.gen_data_path = gen_data_path
         self.real_data_path = real_data_path
         self.kwargs = kwargs
@@ -55,7 +81,7 @@ class EvaluationManager:
         '''self.gen_model = gen_model Gen.GenerationManager(model = self.model,
                                                method = self.method,
                                               dataloader=self.dataloader,
-                                              is_image = self.is_image)'''
+                                              is_image = is_image)'''
 
 
 
@@ -65,17 +91,29 @@ class EvaluationManager:
         self.evals = {
             'losses': self.evals['losses'] if keep_losses else np.array([], dtype = np.float32),
             'losses_batch': self.evals['losses_batch'] if keep_losses else np.array([], dtype = np.float32),
+            'grad_norm': self.evals['grad_norm'] if keep_evals else np.array([], dtype = np.float32),
+            
+            # small dimensional data
+            # continuous
             'wass': self.evals['wass'] if keep_evals else [],
             'mmd': self.evals['mmd'] if keep_evals else [],
+            'msle': self.evals['msle'] if keep_evals else [],
+            # discrete
+            'hellinger': self.evals['hellinger'] if keep_evals else [],
+            'kl_div': self.evals['kl_div'] if keep_evals else [],
+            'sliced_wass': self.evals['sliced_wass'] if keep_evals else [],
+            
+            # image data
             'precision': self.evals['precision'] if keep_evals else [],
             'recall': self.evals['recall'] if keep_evals else [],
+            'f_1_pr': self.evals['f_1_pr'] if keep_evals else [],
             'density': self.evals['density'] if keep_evals else [],
             'coverage': self.evals['coverage'] if keep_evals else [],
-            'f_1_pr': self.evals['f_1_pr'] if keep_evals else [],
             'f_1_dc': self.evals['f_1_dc'] if keep_evals else [],
             'fid': self.evals['fid'] if keep_evals else [],
+            
             'fig': self.evals['fig'] if keep_evals else [],
-            'grad_norm': self.evals['grad_norm'] if keep_evals else np.array([], dtype = np.float32),
+
         }
     
     #def save(self, eval_path):
@@ -123,117 +161,111 @@ class EvaluationManager:
                         **kwargs):
         
         eval_results = {}
-        #wasserstein. Do not compute if image
-        if not self.is_image:
+        
+        is_image = self.modality == 'image'
+        is_continuous = self.state_space == 'continuous'
+        
+        print('modality = {}, state_space = {}, {} samples to generate for evaluation'.format(self.modality, self.state_space, data_to_generate))
+        print('computing metrics...')
+        if not is_image:
             
-            data_to_generate #min(data_to_generate, 128)
-
-            # generate data to evaluate
-            #self.gen_model.generate(data_to_generate, 
-            #                print_progression= True,
-            #                **kwargs)
+            # data_to_generate #min(data_to_generate, 128)
             self.gen_manager.generate(models, data_to_generate, **kwargs)
             
             # prepare data.
-            gen_samples = self.gen_manager.samples
+            gen_samples = self.gen_manager.samples.cpu()
             
             data = self.gen_manager.load_original_data(data_to_generate)
-
-            print('wasserstein')
-            #if self.is_image:
-            #    eval_results['wass'] = compute_wasserstein_distance(data, 
-            #                                        gen_samples,
-            #                                        manual_compute=True)
-            #else:
-            eval_results['wass'] = compute_wasserstein_distance(data, 
-                                                    gen_samples, 
-                                                    bins = 250 if data_to_generate >=512 else 'auto')
-            print('wasserstein:', eval_results['wass'])
-
-            eval_results['mmd'] = MMD_loss()(data.squeeze(1), gen_samples.squeeze(1))#, kernel='rbf')#get_MMD(data, gen_samples, data[0].device)
-
-            # scatter plot, simple 2d data.
-            # precision/recall
-            pr_curve = compute_precision_recall_curve(data, 
-                                                    gen_samples, 
-                                                    num_clusters=100 if data_to_generate > 2500 else 20)
-            #print('prd ok')
-            f_beta = compute_f_beta(*pr_curve)
-            prdc_value = {
-                'precision': f_beta[0],
-                'recall': f_beta[1],
-                'density': 0.,
-                'coverage': 0.,
-                'fid': 0.
-            }
+            
+            if is_continuous:
+                print('wasserstein')
+                eval_results['wass'] = compute_wasserstein_distance(data, 
+                                                        gen_samples, 
+                                                        bins = 250 if data_to_generate >=512 else 'auto')
+                print('mmd')
+                eval_results['mmd'] = MMD_loss()(data.squeeze(1), gen_samples.squeeze(1))#, kernel='rbf')#get_MMD(data, gen_samples, data[0].device)
+                
+                print('msle')
+                eval_results['msle'] = get_msle_empirical(data, gen_samples, agg = 'mean')
+                
+                print('prd')
+                pr_curve = compute_precision_recall_curve(data, 
+                                                        gen_samples, 
+                                                        num_clusters=100 if data_to_generate > 2500 else 20)
+                f_beta = compute_f_beta(*pr_curve)
+                prdc_value = {
+                    'precision': f_beta[0],
+                    'recall': f_beta[1],
+                }
+                # compute f_1 scores
+                prec, rec = prdc_value['precision'], prdc_value['recall']
+                eval_results['f_1_pr'] = (2 * prec * rec) / (prec + rec) if prec + rec > 0 else 0.
+                
+            else:
+                # if the data dimension gets bigger, we only compute sliced wassersetin metric
+                data_dim = torch.prod(torch.tensor(data.shape[1:])).item()
+                only_compute_sliced_wasserstein = data_dim > 8
+                print('data dimension is {}, only compute sliced wass (d >= 8) = {}'.format(data_dim, only_compute_sliced_wasserstein))
+                
+                if only_compute_sliced_wasserstein:
+                    # fill with zero for retro-compatibility
+                    eval_results['kl_div'] = 0.
+                    eval_results['hellinger'] = 0.
+                else:
+                    kl_div, hellinger = compute_kl_div_and_hellinger(data, gen_samples)
+                    eval_results['kl_div'] = kl_div
+                    eval_results['hellinger'] = hellinger
+                
+                # sliced wasserstein
+                sliced_wass = compute_sliced_wasserstein(data, gen_samples, n_projections=1000)
+                eval_results['sliced_wass'] = sliced_wass
+            
         else:
-            # save data in folder
-            import os
-            # need at least 2048 samples for fid score, otherwise imaginary component
-            # its ok I changed the linalg sqrt matrix function
             if data_to_generate != 0:
-                # generate more data if necessary
-                #data_to_gen_wass : really is the batch size now. We use some approximation.
-                gen_samples = torch.tensor([])
-                remaining = data_to_generate
-                print('generating {} images for fid computation'.format(remaining))
-                total_generated_data = 0
-                while remaining > 0:
-                    print(remaining, end = ' ')
-                    self.gen_manager.generate(models,
-                                         min(batch_size, remaining),
-                                         **kwargs)
-                    # save data to file. We do that rather than concatenating to save on memory, 
-                    # but really it is because I want to inspect the images while they are generated
-                    print('saving {} generated images'.format(self.gen_manager.samples.shape[0]))
-                    for i in range(self.gen_manager.samples.shape[0]):
-                        tvu.save_image(self.gen_manager.samples[i], os.path.join(self.gen_data_path, f"{i+total_generated_data}.png"))
-                    total_generated_data += self.gen_manager.samples.shape[0]
-                    #gen_samples = torch.cat((gen_samples, gen_model.samples), dim = 0)
-                    remaining = remaining - self.gen_manager.samples.shape[0]
-                    
-                assert data_to_generate == total_generated_data
-                print('saved generated data in {}.'.format(self.gen_data_path))
+                generate_and_save_data(self.gen_manager,
+                                        self.gen_data_path,
+                                        data_to_generate,
+                                        models,
+                                        batch_size,
+                                        **kwargs)
             
             # fid score
             print('fid')
             eval_results['fid'] = fid_score(self.real_data_path, 
                                             self.gen_data_path, 
-                                            128, # batch size
+                                            batch_size, # batch size
                                             self.method.device, 
-                                            num_workers= 2 if self.is_image else 0)
-            print(eval_results['fid'])
+                                            num_workers= 2 if is_image else 0)            
+            
             print('prdc')
             # precision, recall density, coverage
             prdc_value = prdc(self.real_data_path, 
                             self.gen_data_path, 
-                            128, # batch size 
+                            batch_size, # batch size 
                             self.method.device, 
-                            num_workers= 2 if self.is_image else 0,
+                            num_workers= 2 if is_image else 0,
                             max_num_files=data_to_generate if data_to_generate != 0 else None) # None means read whole image directory, which should be full from a previous run
         
-        for k, v in prdc_value.items():
-            eval_results[k] = v
-        # compute f_1 score
-        if prdc_value['precision'] + prdc_value['recall'] > 0:
-            eval_results['f_1_pr'] = (2 * prdc_value['precision'] * prdc_value['recall']) / (prdc_value['precision'] + prdc_value['recall'])
-        else:
-            eval_results['f_1_pr'] = 0.
-        if prdc_value['density'] + prdc_value['coverage'] > 0:
-            eval_results['f_1_dc'] = (2 * prdc_value['density'] * prdc_value['coverage']) / (prdc_value['density'] + prdc_value['coverage'])
-        else:
-            eval_results['f_1_dc'] = 0.
-
-        # figure
-        if not self.is_image:
-            fig = self.gen_manager.get_plot(xlim = (-fig_lim, fig_lim), ylim = (-fig_lim, fig_lim))
-        else:
-            if len(self.gen_manager.samples) != 0:
-                fig = self.gen_manager.get_image() # todo: load an image from the folder
-            else:
-                fig = None
-        eval_results['fig'] = fig
-        plt.close(fig)
+            for k, v in prdc_value.items():
+                eval_results[k] = v
+            
+            # compute f_1 scores
+            prec, rec = prdc_value['precision'], prdc_value['recall']
+            eval_results['f_1_pr'] = (2 * prec * rec) / (prec + rec) if prec + rec > 0 else 0.
+            den, cov = prdc_value['density'], prdc_value['coverage']
+            eval_results['f_1_dc'] = (2 * den * cov) / (den + cov) if den + cov > 0 else 0.
+            
+            
+        # TODO: figure
+        # if not is_image:
+        #     fig = self.gen_manager.get_plot(xlim = (-fig_lim, fig_lim), ylim = (-fig_lim, fig_lim))
+        # else:
+        #     if len(self.gen_manager.samples) != 0:
+        #         fig = self.gen_manager.get_image() # todo: load an image from the folder
+        #     else:
+        #         fig = None
+        # eval_results['fig'] = fig
+        # plt.close(fig)
 
         if self.logger is not None:
             for k, v in eval_results.items():
@@ -252,11 +284,13 @@ class EvaluationManager:
 
         # print them if necessary
         if self.verbose:
+            print('results:')
             # last loss, if computed
             if self.evals['losses_batch'].any():
-                print(f"\tlosses_batch = {self.evals['losses_batch'][-1]}")
+                print(f"losses_batch = {self.evals['losses_batch'][-1]}")
             # and the valuation metrics
             for k, v in eval_results.items():
-                print('\t{} = {}'.format(k, v))
+                print('{} = {}'.format(k, v))
         
         return eval_results
+

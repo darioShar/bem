@@ -11,6 +11,46 @@ def compute_mean_lploss(tens, lploss = 2.):
                                                 lploss) \
                 / torch.prod(torch.tensor(tens.shape), dim = 0)
 
+
+def compute_sliced_wasserstein(
+    data: torch.Tensor,
+    model_data: torch.Tensor,
+    n_projections: int = 500
+) -> float:
+    # Ensure the data is on CPU for numpy-based Wasserstein, if your function relies on numpy
+    data = data.float().cpu()
+    model_data = model_data.float().cpu()
+
+    N, d = data.shape
+    
+    # Container for distances across projections
+    sw_values = []
+
+    for _ in range(n_projections):
+        # Sample a random direction in the d-simplex:
+        # we draw d independent exponentials (or uniform(0,1) > 0) and normalize
+        direction = torch.rand(d - 1)
+        # add 0 and 1 to direction
+        direction = torch.cat([torch.tensor([0.0]), direction, torch.tensor([1.0])])
+        direction = torch.sort(direction).values
+        direction = direction[1:] - direction[:-1]
+        
+        # Project data onto this direction
+        proj_data = (data * direction).sum(dim=1).numpy()
+        proj_model = (model_data * direction).sum(dim=1).numpy()
+        
+        # proj_data and proj_model are in [0, 1]
+        
+        # Compute the 1D Wasserstein distance of the projections
+        w = compute_wasserstein_distance(proj_data, proj_model, bins='auto')
+                                            # bins = 250 if N >= 512 else 'auto')
+        sw_values.append(w)
+
+    # Average the 1D Wasserstein distances
+    return float(sum(sw_values) / len(sw_values))
+
+
+
 # updated to manually compute bins if requested
 def compute_wasserstein_distance(data, 
                                  gen_samples,

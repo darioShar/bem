@@ -40,7 +40,7 @@ except ImportError:
         return x
 
 # from pytorch_fid.inception import InceptionV3
-from bem.evaluate.inception import InceptionV3
+from .inception import InceptionV3
 
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}

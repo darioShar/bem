@@ -1,58 +1,93 @@
+from torch.utils.data import DataLoader
 import os
-import Experiments as Exp
-import Logger as Logger
-from utils_exp import *
+
+from manage.files import FileHandler
+from manage.data import get_dataset, CurrentDatasetInfo, Modality, StateSpace
+from manage.logger import Logger
+from manage.generation import GenerationManager
+from manage.training import TrainingManager
+from evaluate.EvaluationManager import EvaluationManager
+from datasets import get_dataset
+from manage.checkpoints import load_experiment, save_experiment
+from manage.setup import _get_device, _optimize_gpu, _set_seed
+
+from ddpm_init import init_method_ddpm, init_models_optmizers_ls, init_learning_schedule
+
 from script_utils import *
 
-# import/define your own functions here for method and model initialization, logging, etc.
 
-# path to the config files
-CONFIG_PATH = 'configs/'
+CONFIG_PATH = './configs/'
 
+
+    
 def run_exp(config_path):
     args = parse_args()
+    
+    # Specify directory to save and load checkpoints
+    checkpoint_dir = 'checkpoints'
+    save_dir = os.path.join(checkpoint_dir, args.name)
+    
+    
     # open and get parameters from file
     p = FileHandler.get_param_from_config(config_path, args.config + '.yml')
-
     update_parameters_before_loading(p, args)
 
-    # create experiment object. Specify directory to save and load checkpoints, experiment parameters, and potential logger object
-    checkpoint_dir = os.path.join('models', args.name)
-    # the ExpUtils class specifies how to hash the parameter dict, and what and how to initiliaze methods and models
-    exp = Exp.Experiment(checkpoint_dir=checkpoint_dir, 
-                        p=p,
-                        logger = ...,
-                        exp_hash= None, # will use default function
-                        eval_hash=None, # will use default function
-                        init_method_by_parameter= ...,
-                        init_models_by_parameter= ...,
-                        reset_models= ...)
-
-
+    trainer, logger, file_handler, models, optimizers, learning_schedules, method, eval, gen_manager = initialize_experiment(p)
+    
     # load if necessary. Must be done here in case we have different hashes afterward
     if args.resume:
-        if args.resume_epoch is not None:
-            exp.load(epoch=args.resume_epoch)
-        else:
-            exp.load()
-    else:
-        exp.prepare()
+        load_experiment(
+                p=p,
+                trainer=trainer,
+                file_handler = file_handler,
+                save_dir=save_dir,
+                checkpoint_epoch=args.resume_epoch if args.resume_epoch is not None else None,
+                )
     
-    update_experiment_after_loading(exp, args) # update parameters after loading, like new optim learning rate...
-    additional_logging(exp, args) # log some additional information
-    exp.print_parameters() # print parameters to stdout
+    # update parameters after loading, like new optim learning rate...
+    update_experiment_after_loading(p, 
+        optimizers,
+        learning_schedules,
+        init_learning_schedule,
+        args,
+    )
     
-    # run the experiment
-    exp.run(progress= p['run']['progress'],
-            max_batch_per_epoch= args.n_max_batch, # to speed up testing
-            no_ema_eval=args.no_ema_eval, # to speed up testing
-        )
+    # log some additional information
+    additional_logging(p,
+        logger,
+        trainer,
+        file_handler,
+        args
+    ) 
     
-    # in any case, save last models.
-    print(exp.save(curr_epoch=p['run']['epochs']))
+    # print parameters to stdout
+    print_dict(p)
+        
+    # run training
+    def checkpoint_callback(checkpoint_epoch):
+        print('saved files to', save_experiment(checkpoint_epoch=checkpoint_epoch))
+
+    # run the training loop wuth parameters from the configuration file
+    # specifying arguments here will overwrite the arguments obtained from the configuration file, for this training run
+    trainer.train(
+        total_epoch=p['run']['epochs'], 
+        checkpoint_callback=checkpoint_callback,
+        no_ema_eval=args.no_ema_eval, # if True, will not run evaluation with EMA models
+        progress= p['run']['progress'], # if True, will print progress bar
+        max_batch_per_epoch= args.n_max_batch, 
+    )
     
-    # terminates everything (e.g., logger etc.)
-    exp.terminate()
+    # in any case, save the final model
+    save_experiment(p=p,
+                    trainer = trainer,
+                    fh = file_handler,
+                    save_dir=save_dir,
+                    checkpoint_epoch=p['run']['epochs'])
+    
+    # terminates logger 
+    if logger is not None:
+        logger.stop()
+
 
 
 if __name__ == '__main__':

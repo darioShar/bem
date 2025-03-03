@@ -1,4 +1,8 @@
 **.pyc
 **neptune
 **.ipynb_checkpoints
-**.ipynb
+# **.ipynb
+checkpoints**
+**pycache**
+*.mp4
+**eval_files

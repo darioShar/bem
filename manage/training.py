@@ -7,6 +7,15 @@ from tqdm import tqdm
 from .utils_ema import EMAHelper
 #Wrapper around training and evaluation functions
 
+def compute_layer_norms(model):
+    layer_norms = []
+    for name, param in model.named_parameters():
+        if param.requires_grad:  # Ensure the parameter is trainable
+            norm = torch.norm(param)  # Frobenius norm by default
+            # layer_norms.append((name, norm))
+            layer_norms.append(norm)
+    return torch.stack(layer_norms).detach()
+
 
 class TrainingManager:
     
@@ -20,6 +29,7 @@ class TrainingManager:
                  logger = None,
                  ema_rates = None,
                  reset_models = None,
+                 p = None,
                  **kwargs):
         self.epochs = 0
         self.total_steps = 0
@@ -30,7 +40,8 @@ class TrainingManager:
         self.learning_schedules = learning_schedules
         self.eval = eval
         self.reset_models = reset_models
-        if ema_rates is None:
+        self.p = p
+        if (ema_rates is None):
             self.ema_objects = None
         else:
             #self.ema_models = [ema.EMAHelper(model, mu = mu) for mu in ema_rates]
@@ -42,13 +53,6 @@ class TrainingManager:
                 ema_dict = {name: EMAHelper(model, mu = mu) for name, model in self.models.items()}
                 ema_dict['eval'] = copy.deepcopy(eval)
                 self.ema_objects.append(ema_dict)
-            # self.ema_objects = [{
-            #     'model': ema.EMAHelper(self.model, mu = mu),
-            #     'model_vae': ema.EMAHelper(self.model_vae, mu = mu) if self.model_vae is not None else None,
-            #     'eval': copy.deepcopy(eval),
-            # } for mu in ema_rates]
-            
-            #self.ema_evals = [(copy.deepcopy(eval), mu) for mu in ema_rates]
             eval.logger = logger 
             for ema_object in self.ema_objects:
                 ema_object['eval'].logger = logger
@@ -73,14 +77,17 @@ class TrainingManager:
             # batch_loss is nan, reintialize models
             if np.isnan(batch_loss): 
                 print('nan in loss detected, reinitializing models...')
-                models, optimizers, learning_schedules = self.reset_models()
-                self.models = models 
+                models, optimizers, learning_schedules = self.reset_models(self.p)
+                self.models = models
                 self.optimizers = optimizers
                 self.learning_schedules = learning_schedules
             
             self.eval.register_batch_loss(batch_loss)
             if self.logger is not None:
                 self.logger.log('current_batch', self.total_steps)
+            
+            # layer_norms = compute_layer_norms(self.models['default'])
+            # print('layer norms: min, max, mean, std', torch.min(layer_norms).item(), torch.max(layer_norms).item(), torch.mean(layer_norms).item(), torch.std(layer_norms).item())
         
         self._train_epochs(total_epoch, 
                            epoch_callback=epoch_callback, 
@@ -99,6 +106,8 @@ class TrainingManager:
                 epoch_callback = None,
                 max_batch_per_epoch = None,
                 progress = False,
+                refresh_data = False,
+                dataset_with_labels = False,
                 **kwargs):
         
         for name, model in self.models.items():
@@ -108,13 +117,31 @@ class TrainingManager:
 
         while self.epochs < total_epochs:
             epoch_loss = steps = 0
-            for i, (Xbatch, y) in enumerate(tqdm(self.data) if progress else self.data):
+            for i, Xbatch in enumerate(tqdm(self.data) if progress else self.data):
                 if max_batch_per_epoch is not None:
                     if i >= max_batch_per_epoch:
                         break
                 
+                if dataset_with_labels:
+                    Xbatch, y = Xbatch
+                    kwargs['y'] = y
+                
                 training_results = self.method.training_losses(self.models, Xbatch, **kwargs)
                 loss = training_results['loss']
+                # check if nan in loss
+                if torch.isnan(loss):
+                    print('nan in loss detected. Saving training_results and breaking loop...')
+                    torch.save(training_results, 'nan_training_results.pth')
+                    return
+                    # print('nan in loss detected, resetting models...')
+                    # self.models, self.optimizers, self.learning_schedules = self.reset_models(self.p)
+                    # print('models reset.')
+                    
+                    
+                    # print('nan in loss detected, skipping batch...')
+                    # for name, model in self.models.items():
+                    #     model.zero_grad()
+                    continue
                 # and finally gradient descent
                 for name in self.models:
                     self.optimizers[name].zero_grad()
@@ -144,6 +171,9 @@ class TrainingManager:
                 epoch_callback(epoch_loss,models=self.models)
 
             print('Done training epoch {}/{}'.format(self.epochs, total_epochs))
+            
+            if refresh_data:
+                self.data.dataset.refresh_data()
 
             # now potentially checkpoint
             if (checkpoint_freq is not None) and (self.epochs % checkpoint_freq) == 0:
@@ -163,7 +193,7 @@ class TrainingManager:
                 logger.log('_'.join(('ema', str(ema_obj['default'].mu), str(key))), value)
         
         if not evaluate_emas:
-            print('evaluating model')
+            print('evaluating non-ema model')
             for name, model in self.models.items():
                 model.eval()
             with torch.inference_mode():
@@ -176,65 +206,6 @@ class TrainingManager:
                 with torch.inference_mode():
                     print('evaluating ema model with mu={}'.format(ema_obj['default'].mu))
                     ema_obj['eval'].evaluate_model(models, callback_on_logging = ema_callback_on_logging, **kwargs)
-
-
-    def display_plots(self, 
-                   ema_mu = None, 
-                   title = None,
-                   nb_datapoints = 10000,
-                   marker = '.',
-                   color='blue',
-                   plot_original_data=False,
-                   xlim = (-0.5, 1.5),
-                   ylim = (-0.5, 1.5),
-                   alpha = 0.5):
-        # loading the right model
-        models = {}
-        if ema_mu is not None:
-            if self.ema_objects is not None:
-                for ema_obj in self.ema_objects:
-                    for name, ema in ema_obj.items():
-                        if ema.mu == ema_mu:
-                            models[name] = ema.get_ema_model()
-                            models[name].eval()
-        else:
-            models = self.models
-        
-        assert len(models) != 0, 'ema_mu={} has not been found'.format(ema_mu)
-
-        # number of samples to draw
-        nsamples = 1 if self.eval.is_image else nb_datapoints
-        print('Generating {} datapoints'.format(nsamples))
-
-        # generate images
-        gm = self.eval.gen_manager
-        with torch.inference_mode():
-            gm.generate(self.models, nsamples, get_sample_history = True, print_progression = True)
-        
-        # get and display plots
-        if self.eval.is_image:
-            gm.get_image(black_and_white=True, title=title)
-        else:
-            gm.get_plot(plot_original_data=plot_original_data,
-                                 limit_nb_datapoints = nb_datapoints,
-                                 title=title, 
-                                 marker = marker, 
-                                 color=color, 
-                                 xlim=xlim, 
-                                 ylim=ylim,
-                                 alpha=alpha)
-        plt.show(block=False)
-        anim = gm.get_animation(plot_original_data=plot_original_data,
-                                  limit_nb_datapoints=nb_datapoints,
-                                  title=title, 
-                                  marker = marker, 
-                                  color=color, 
-                                  xlim=xlim, 
-                                  ylim=ylim,
-                                  alpha=alpha,
-                                  method = self.method)
-        plt.show(block=False)
-        return anim
     
 
     def load(self, filepath):
@@ -317,43 +288,3 @@ class TrainingManager:
             # log the saved evaluation
             ema_obj['eval'].log_existing_eval_values(folder='eval_ema_{}'.format(ema_obj['default'].mu))
     
-    # also returns evals
-    def display_evals(self,
-                      key, 
-                      rang = None,
-                      xlim = None,
-                      ylim = None,
-                      log_scale = False):
-        import copy
-        metric = copy.deepcopy(self.eval.evals[key])
-        if rang is not None:
-            metric = metric[rang[0]:rang[1]]
-        plt.plot(np.arange(len(metric)), metric)
-        if xlim is not None:
-            plt.xlim(xlim) 
-        if ylim is not None:
-            plt.ylim(ylim)
-        if log_scale:
-            plt.yscale('log')
-        plt.show()
-
-    # def get_ema_model(self, mu):
-    #     assert False, 'deprecated'
-    #     for ema_obj in self.ema_objects:
-    #         if ema_obj['model'].mu == mu:
-    #             return ema_obj['model'].get_ema_model()
-    #             #import copy
-    #             #new_ema_model = copy.deepcopy(self.model)
-    #             #ema.ema(new_ema_model)
-    #             #return new_ema_model
-    #     raise ValueError('No EMA model with mu = {}'.format(mu))
-    
-    #def reset_training(self, new_parameters = None):
-    #    self.eval.reset()
-    #    self.total_steps = 0
-    #    self.epochs = 0
-    #    self.learning_schedule.reset()
-    #    if self.logger is not None:
-    #        self.logger.stop()
-    #    if new_parameters is not None:
-    #        self.logger.initialize(new_parameters)

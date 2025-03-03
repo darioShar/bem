@@ -4,11 +4,13 @@ import copy
 class EMAHelper(object):
     def __init__(self, 
                  model,
-                 mu=0.999):
+                 mu=0.99):
         self.mu = mu
         self.shadow = {}
-        self.register(model)
-        self.model = copy.deepcopy(model) # keep a copy of the model
+        self.model = None
+        if model is not None:
+            self.register(model)
+            self.model = copy.deepcopy(model) # keep a copy of the model ?
 
     # create copy of trainable parameters
     def register(self, module):
