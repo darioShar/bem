@@ -45,7 +45,7 @@ class CurrentDatasetInfo:
         CurrentDatasetInfo.modality = modality
         CurrentDatasetInfo.state_space = state_space
         CurrentDatasetInfo.has_labels = has_labels
-        print('Dataset type set to: {}, has_labels={}'.format(modality, state_space, has_labels))
+        print('Current dataset info: modality={}, state_space={}, has_labels={}'.format(modality, state_space, has_labels))
 
 
 
@@ -87,7 +87,7 @@ def get_dataset(p):
             lsun_category=None
         )
         
-        modality='tensor_rank_two'
+        modality='image'
         state_space='discrete' if is_discrete else 'continuous'
         has_labels = True
         

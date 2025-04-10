@@ -64,7 +64,12 @@ def run_exp(config_path):
         
     # run training
     def checkpoint_callback(checkpoint_epoch):
-        print('saved files to', save_experiment(checkpoint_epoch=checkpoint_epoch))
+        print('saved files to', 
+              save_experiment(p=p,
+                              trainer=trainer,
+                              fh = file_handler,
+                              save_dir=save_dir,
+                              checkpoint_epoch=checkpoint_epoch))
 
     # run the training loop wuth parameters from the configuration file
     # specifying arguments here will overwrite the arguments obtained from the configuration file, for this training run
