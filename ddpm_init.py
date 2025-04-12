@@ -13,6 +13,7 @@ from models.MLP import MLPModel
 from models import unet_model, discrete_unet_model
 import torch.optim as optim
 from transformers import get_scheduler
+import generative_methods.diffusion as diffusion
 
 ''' at any point during the program execution, will give information about the current dataset being used '''
 from data.data import CurrentDatasetInfo, Modality, StateSpace
@@ -34,16 +35,9 @@ sample - returns a sample trajectory from the model. Its arguments are:
 '''
 def init_method_ddpm(p):
     chosen_gen_model = p['method']
-    assert chosen_gen_model in ['dlpm'], f"In this implementation, chosen method should be in 'dlpm', got {chosen_gen_model}"
-    method = GenerativeLevyProcess(alpha = p[chosen_gen_model]['alpha'],
-                                device = p['device'],
-                                reverse_steps = p[chosen_gen_model]['reverse_steps'],
-                                rescale_timesteps = p[chosen_gen_model]['rescale_timesteps'],
-                                isotropic = p[chosen_gen_model]['isotropic'],
-                                model_mean_type = p[chosen_gen_model]['mean_predict'],
-                                model_var_type = p[chosen_gen_model]['var_predict'],
-                                scale = p[chosen_gen_model]['scale'],
-                                input_scaling = p[chosen_gen_model]['input_scaling'],
+    assert chosen_gen_model in ['diffusion'], f"In this implementation, chosen method should be in 'diffusion', got {chosen_gen_model}"
+    method = diffusion.DiffusionProcess(device = p['device'],
+                              **p[chosen_gen_model]
     )
     return method
 

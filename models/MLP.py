@@ -48,147 +48,112 @@ class LinearMultChannels(nn.Module):
 
 #Can predict gaussian_noise, stable_noise, anterior_mean
 class MLPModel(nn.Module):
-    possible_time_embeddings = [
-        'sinusoidal',
-        'learnable',
-        'one_dimensional_input'
-    ]
 
     def __init__(self, p):
         super(MLPModel, self).__init__()
 
         # extract from param dict
         self.nfeatures =        p['data']['d']
-        self.time_emb_type =    p['model']['mlp']['time_emb_type'] 
         self.time_emb_size =    p['model']['mlp']['time_emb_size']
         self.nblocks =          p['model']['mlp']['nblocks'] 
         self.nunits =           p['model']['mlp']['nunits']
         self.skip_connection =  p['model']['mlp']['skip_connection']
-        self.group_norm =       p['model']['mlp']['group_norm']
+        self.layer_norm =       p['model']['mlp']['layer_norm']
         self.dropout_rate =     p['model']['mlp']['dropout_rate']
-        self.softplus =         p['model']['mlp']['softplus']
-        self.beta =             p['model']['mlp']['beta']
-        self.threshold =        p['model']['mlp']['threshold']
-        self.out_channel_mult = p['model']['mlp']['out_channel_mult']
+        self.learn_variance =   p[ p['method'] ]['learn_variance']
         self.device =           p['device']
+        self.num_classes =      p['data']['num_classes'] if p[p['method']]['conditional'] else None
         
-        # to be computed later depending on chosen architecture
-        self.additional_dim =   0 
-
-        assert self.time_emb_type in self.possible_time_embeddings
         
         # for dropout and group norm.
         self.dropout = nn.Dropout(p=self.dropout_rate)
-        self.group_norm_in = nn.LayerNorm([self.nunits]) if self.group_norm else nn.Identity()
-        # self.act = nn.SiLU(inplace=False)
+        self.layer_norm_in = nn.LayerNorm([self.nunits]) if self.layer_norm else nn.Identity()
         self.act = nn.SiLU(inplace=False)
         
-        # manage time embedding type
-        if self.time_emb_type == 'sinusoidal':
-            self.time_emb = \
-            SinusoidalPositionalEmbedding(self.diffusion_steps, 
-                                              self.time_emb_size, self.device)
-        elif self.time_emb_type == 'learnable':
-            self.time_emb = nn.Linear(1, self.time_emb_size).to(self.device) #Embedding.LearnableEmbedding(1, self.time_emb_size, self.device)
-        elif self.time_emb_type == 'one_dimensional_input':
-            self.additional_dim += 1
         
-        if self.time_emb_type != 'one_dimensional_input':
-            # possibly, remove the mlp and just use the embedding
-            self.time_mlp = nn.Sequential(self.time_emb,
+        
+        self.time_emb = nn.Linear(1, self.time_emb_size) #Embedding.LearnableEmbedding(1, self.time_emb_size, self.device)
+        self.time_mlp = nn.Sequential(self.time_emb,
                                       self.act,
                                       nn.Linear(self.time_emb_size, self.time_emb_size), 
                                       self.act)
         
-        self.linear_in =  nn.Linear(self.nfeatures + self.additional_dim, self.nunits)
+        if self.num_classes is not None:
+            self.y_emb = nn.Embedding(self.num_classes + 1, self.time_emb_size)
+            self.y_mlp = nn.Sequential(self.y_emb,
+                                      self.act,
+                                      nn.Linear(self.time_emb_size, self.time_emb_size),
+                                      self.act)
+        
+        self.linear_in =  nn.Linear(self.nfeatures, self.nunits)
         
         self.inblock = nn.Sequential(self.linear_in,
-                                     self.group_norm_in, 
+                                     self.layer_norm_in, 
                                      self.act)
         
         self.midblocks = nn.ModuleList([DiffusionBlockConditioned(
                                             self.nunits, 
                                             self.dropout_rate, 
                                             self.skip_connection, 
-                                            self.group_norm,
-                                            time_emb_size = self.time_emb_size \
-                                                if self.time_emb_type != 'one_dimensional_input'\
-                                                else False,
+                                            self.layer_norm,
+                                            time_emb_size = self.time_emb_size,
                                             activation = nn.SiLU)
                                         for _ in range(self.nblocks)])
         
-        if self.out_channel_mult > 1:
-            self.outblock =DiffusionBlockConditionedMultChannels(
-                        self.nunits, 
-                        self.dropout_rate, 
-                        self.skip_connection, 
-                        self.group_norm,
-                        self.out_channel_mult, # number of channels to create
-                        time_emb_size = self.time_emb_size \
-                            if self.time_emb_type != 'one_dimensional_input'\
-                            else False,
-                        activation = nn.SiLU
-                        )
-        else:
-            self.outblock =DiffusionBlockConditioned(
-                            self.nunits, 
-                            self.dropout_rate, 
-                            self.skip_connection, 
-                            self.group_norm,
-                            time_emb_size = self.time_emb_size \
-                                if self.time_emb_type != 'one_dimensional_input'\
-                                else False,
-                            activation = nn.SiLU
-                            )
-        if self.out_channel_mult > 1:
-            self.last_layer = LinearMultChannels(
-                self.nunits, 
-                self.nfeatures, 
-                nchannels=3)
-        else:
-            self.last_layer = nn.Linear(self.nunits, self.nfeatures)
+        # add one conditioned block and one MLP for both mean and variance computation
+        self.outblocks_mean_cond_mlp = DiffusionBlockConditioned(
+                                                self.nunits, 
+                                                self.dropout_rate, 
+                                                self.skip_connection, 
+                                                self.layer_norm,
+                                                time_emb_size = self.time_emb_size,
+                                                activation = nn.SiLU)
+        self.outblocks_mean_ff = nn.Linear(self.nunits, self.nfeatures)
+            
+        if self.learn_variance:
+            self.outblocks_var_mlp =  DiffusionBlockConditioned(
+                                                self.nunits, 
+                                                self.dropout_rate, 
+                                                self.skip_connection, 
+                                                self.layer_norm,
+                                                time_emb_size = self.time_emb_size,
+                                                activation = nn.SiLU)
+            self.outblocks_mvar_ff = nn.Linear(self.nunits, self.nfeatures)
         
         
+    def forward(self, x, timestep, y = None):
         
-        # add a Softplus activation
-        if self.softplus:
-            self.act_softplus = nn.Softplus(beta=self.beta, threshold=self.threshold)
+        t = timestep.unsqueeze(-1).unsqueeze(-1) # add batch dim and channel dim
+        t = self.time_mlp(t.to(torch.float32))
         
-        
-
-    def forward(self, x, timestep):
-        
-        x = x.float()
-
-        timestep = timestep.unsqueeze(1) # create batch dimension
-        
-        inp = [x]
-        # same but for time variable
-        if self.time_emb_type == 'one_dimensional_input':
-            inp += [timestep]
-            # set to zero because we must feed a dummy to midblocks
-            t = torch.zeros(size=timestep.size())
-        else:
-            t = self.time_mlp(timestep.to(torch.float32))
-        
-        # create channel dimension
-        t = t.unsqueeze(1)
+        if (self.num_classes is not None) and (y is not None):
+            y = self.y_mlp(y)
+            y = y.squeeze(1) # embedding layers add an extra channel dimension
+            t = t+ y
         
         # input
-        val = torch.hstack(inp)
-        # compute
+        val = x
+        
+        # input block
         val = self.inblock(val)
+        
+        # midblocks
         for midblock in self.midblocks:
             val = midblock(val, t)
         
-        val_1 = self.outblock(val, t)
-        val_1 = self.last_layer(val_1)        
-        if self.softplus:
-            val_1 = self.act_softplus(val_1)
-        return val_1
-            
-        # duplicate last
-        #val = val.expand(val.shape[0], 2*val.shape[1], *val.shape[2:])
+        # output blocks
+        val_mean = self.outblocks_mean_cond_mlp(val, t)
+        val_mean = self.outblocks_mean_ff(val_mean)
+        
+        # if we learn variance
+        if not self.learn_variance:
+            return val_mean
+
+        val_var = self.outblocks_var[0](val, t)
+        val_var = self.outblocks_var[1](val_var)
+        
+        return torch.concat([val_mean, val_var], dim = 1) # concat on channels dim
+        
 
     
     

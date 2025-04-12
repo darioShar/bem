@@ -87,23 +87,29 @@ def _between_minus_1_1_with_quantile(x, quantile, scale_to_minus_1_1 = True):
 
 
 def sample_2_gmm(n_samples, 
-                 alpha = None, 
-                 n = None, 
-                 std = None, 
-                 theta = 1.0, 
-                 weights = None, 
-                 device = None, 
-                 normalize=False, 
-                 isotropic = False,
-                 between_minus_1_1 = False,
-                    quantile_cutoff = 1.0):
-    if weights is None:
+                d = 2,
+                std = None, 
+                theta = 1.0,
+                weights = None, 
+                normalize=False, 
+                between_minus_1_1 = False,
+                quantile_cutoff = 1.0,
+                random_means = False,
+                **kwargs):
+    assert d >= 1, '>=1d GMM is supported'
+    if (weights is None) or (len(weights) != 2):
         weights = np.array([0.5, 0.5])
-    means = np.array([ [theta, 0], [-theta, 0] ])
+    if not random_means:
+        means = np.zeros((2, d))
+        means[0, 0] = -theta
+        means[1, 0] =  theta
+    else:
+        means = theta*(np.random.rand(2, d) * 2 - 1)
+    
     gmm = GaussianMixture(n_components=2)
     gmm.weights_ = weights
     gmm.means_ = means
-    gmm.covariances_ = [std*std*np.eye(2) for i in range(2)]
+    gmm.covariances_ = [std*std*np.eye(d) for _ in range(2)]
     x, _ = gmm.sample(n_samples)
     if normalize:
         x = (x - x.mean()) / x.std()
@@ -111,33 +117,39 @@ def sample_2_gmm(n_samples,
     x = torch.tensor(x, dtype = torch.float32)
     if between_minus_1_1:
         x = _between_minus_1_1_with_quantile(x, quantile_cutoff, scale_to_minus_1_1=True) # should do something with 1 / sqrt(n)
-    x[torch.randperm(x.size()[0])] # shuffle rows
+    x = x[torch.randperm(x.size()[0])] # shuffle rows
     x = x.unsqueeze(1) # add channel dimension
     return x
 
 def sample_grid_gmm(n_samples, 
-                    alpha = None, 
                     d = 2,
                     n = None, 
                     std = None, 
-                    theta = None, 
                     weights = None, 
-                    device = None, 
                     normalize=False, 
-                    isotropic = False,
                     between_minus_1_1 = False,
-                    quantile_cutoff = 1.0):
+                    quantile_cutoff = 1.0,
+                    random_means = False,
+                    **kwargs):
+    assert d >=2 , '>=2d GMM grid is supported'
+    
     if weights is None:
         weights = np.array([1 / (n*n) for i in range(n*n)])
-    means = []
+    means = np.zeros((n*n, d))
+    if random_means:
+        means = np.random.rand(n*n, d) * 2 - 1
+    # fill first 2 dimensions
     for i in range(n):
         for j in range(n):
-            means.append([2*i/(n - 1) - 1, 2*j/(n-1) - 1])
+            means[i*n + j, 0]=  2*i/(n - 1) - 1
+            means[i*n + j, 1] = 2*j/(n - 1) - 1
+    
+                
     means = np.array(means)
     gmm = GaussianMixture(n_components=n*n)
     gmm.weights_ = weights
     gmm.means_ = means
-    gmm.covariances_ = [std*std*np.eye(2) for i in range(n*n)]
+    gmm.covariances_ = [std*std*np.eye(d) for _ in range(n*n)]
     x, _ = gmm.sample(n_samples)
     if normalize:
         x = (x - x.mean()) / x.std()
@@ -146,9 +158,11 @@ def sample_grid_gmm(n_samples,
     if between_minus_1_1:
         x = _between_minus_1_1_with_quantile(x, quantile_cutoff) # should do something with 1 / sqrt(n)
     
-    x[torch.randperm(x.size()[0])] # shuffle rows
+    x = x[torch.randperm(x.size()[0])] # shuffle rows
     x = x.unsqueeze(1) # add channel dimension
-    return x[torch.randperm(x.size()[0])]
+    return x
+
+
 
 
 def gen_swiss_roll(n_samples, 

@@ -69,7 +69,9 @@ def get_dataset(p):
     if dataset in available['custom']:
         train_dataset = CustomDistributionDataset(**p['data'])
         train_dataset.generate()
-        test_dataset = CustomDistributionDataset(**p['data'])
+        test_data_kwargs = p['data']
+        test_data_kwargs['n_samples'] = p['eval']['real_data']
+        test_dataset = CustomDistributionDataset(**test_data_kwargs)
         test_dataset.generate()
         
         modality = 'tensor_rank_two'

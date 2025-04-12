@@ -59,10 +59,12 @@ class EvaluationManager:
                  method,
                  gen_manager,
                  dataloader,
+                 test_dataloader = None,
                  verbose = True,
                  logger = None,
                  modality = None,
                  state_space = None,
+                 has_labels = False,
                  gen_data_path = None,
                  real_data_path = None,
                  **kwargs):
@@ -70,10 +72,12 @@ class EvaluationManager:
         self.method = method
         self.gen_manager = gen_manager
         self.dataloader = dataloader
+        self.test_dataloader = test_dataloader
         self.verbose = verbose
         self.logger = logger
         self.modality = modality
         self.state_space = state_space
+        self.has_labels = has_labels
         self.gen_data_path = gen_data_path
         self.real_data_path = real_data_path
         self.kwargs = kwargs
@@ -92,6 +96,7 @@ class EvaluationManager:
             'losses': self.evals['losses'] if keep_losses else np.array([], dtype = np.float32),
             'losses_batch': self.evals['losses_batch'] if keep_losses else np.array([], dtype = np.float32),
             'grad_norm': self.evals['grad_norm'] if keep_evals else np.array([], dtype = np.float32),
+
             
             # small dimensional data
             # continuous
@@ -111,6 +116,8 @@ class EvaluationManager:
             'coverage': self.evals['coverage'] if keep_evals else [],
             'f_1_dc': self.evals['f_1_dc'] if keep_evals else [],
             'fid': self.evals['fid'] if keep_evals else [],
+            
+            'test_losses': self.evals['test_losses'] if keep_evals else [],
             
             'fig': self.evals['fig'] if keep_evals else [],
 
@@ -164,9 +171,29 @@ class EvaluationManager:
         
         is_image = self.modality == 'image'
         is_continuous = self.state_space == 'continuous'
+        has_labels = self.has_labels
         
         print('modality = {}, state_space = {}, {} samples to generate for evaluation'.format(self.modality, self.state_space, data_to_generate))
         print('computing metrics...')
+        
+        # first, computing test loss
+        if self.test_dataloader is not None:
+            print('computing test loss')
+            for model in models.values():
+                model.eval()
+            model_kwargs = {}
+            test_loss = 0.
+            with torch.inference_mode():
+                for i, Xbatch in enumerate(self.test_dataloader):
+                    if has_labels:
+                        Xbatch, y = Xbatch
+                        model_kwargs['y'] = y
+                    training_results = self.method.training_losses(models, Xbatch, **model_kwargs)
+                    test_loss_batch = training_results['loss']
+                    test_loss += test_loss_batch.item()
+            test_loss /= len(self.dataloader)
+            eval_results['test_losses'] = test_loss
+        
         if not is_image:
             
             # data_to_generate #min(data_to_generate, 128)
@@ -175,22 +202,38 @@ class EvaluationManager:
             # prepare data.
             gen_samples = self.gen_manager.samples.cpu()
             
-            data = self.gen_manager.load_original_data(data_to_generate)
+            # get test data from test_dataloader
+            dataloader = self.dataloader if self.test_dataloader is None else self.test_dataloader
+            
+            # loop over the test dataloader until we have 'data_to_generate' samples
+            data_size = 0
+            total_data = torch.tensor([])
+            while data_size < data_to_generate:
+                _, (data) = next(enumerate(dataloader))
+                if has_labels:
+                    data, y = data
+                total_data = torch.concat([total_data, data])
+                data_size += data.size()[0]
+            data = total_data[:data_to_generate]
             
             if is_continuous:
                 print('wasserstein')
                 eval_results['wass'] = compute_wasserstein_distance(data, 
                                                         gen_samples, 
                                                         bins = 250 if data_to_generate >=512 else 'auto')
-                print('mmd')
-                eval_results['mmd'] = MMD_loss()(data.squeeze(1), gen_samples.squeeze(1))#, kernel='rbf')#get_MMD(data, gen_samples, data[0].device)
                 
                 print('msle')
                 eval_results['msle'] = get_msle_empirical(data, gen_samples, agg = 'mean')
                 
+                clipped_data = torch.clamp(data, min = -3, max = 3)
+                
+                print('mmd')
+                eval_results['mmd'] = MMD_loss()(clipped_data.squeeze(1)[:2500], gen_samples.squeeze(1)[:2500])#, kernel='rbf')#get_MMD(data, gen_samples, data[0].device)
+                
                 print('prd')
-                pr_curve = compute_precision_recall_curve(data, 
-                                                        gen_samples, 
+                # we need to clip the data to ensure that the prdc function does not consume too much memory
+                pr_curve = compute_precision_recall_curve(clipped_data[:5000], 
+                                                        gen_samples[:5000], 
                                                         num_clusters=100 if data_to_generate > 2500 else 20)
                 f_beta = compute_f_beta(*pr_curve)
                 prdc_value = {
@@ -199,6 +242,8 @@ class EvaluationManager:
                 }
                 # compute f_1 scores
                 prec, rec = prdc_value['precision'], prdc_value['recall']
+                eval_results['precision'] = prec
+                eval_results['recall'] = rec
                 eval_results['f_1_pr'] = (2 * prec * rec) / (prec + rec) if prec + rec > 0 else 0.
                 
             else:
@@ -253,8 +298,12 @@ class EvaluationManager:
             
             # compute f_1 scores
             prec, rec = prdc_value['precision'], prdc_value['recall']
+            eval_results['precision'] = prec
+            eval_results['recall'] = rec
             eval_results['f_1_pr'] = (2 * prec * rec) / (prec + rec) if prec + rec > 0 else 0.
             den, cov = prdc_value['density'], prdc_value['coverage']
+            eval_results['density'] = den
+            eval_results['coverage'] = cov
             eval_results['f_1_dc'] = (2 * den * cov) / (den + cov) if den + cov > 0 else 0.
             
             
@@ -282,6 +331,7 @@ class EvaluationManager:
 
         # append results to self.evals dictionnary
         for k in eval_results.keys():
+            self.evals[k] = list(self.evals[k])
             self.evals[k].append(eval_results[k])
 
         # print them if necessary

@@ -49,14 +49,14 @@ class GenerationManager:
             self.samples = x.cpu()
 
 
-    def load_original_data(self, nsamples):
-        data_size = 0
-        total_data = torch.tensor([])
-        while data_size < nsamples:
-            _, (data) = next(enumerate(self.original_data))
-            if self.is_image:
-                data, y = data
-            total_data = torch.concat([total_data, data])
-            data_size += data.size()[0]
-        return total_data[:nsamples]
+    # def load_original_data(self, nsamples):
+    #     data_size = 0
+    #     total_data = torch.tensor([])
+    #     while data_size < nsamples:
+    #         _, (data) = next(enumerate(self.original_data))
+    #         if self.is_image:
+    #             data, y = data
+    #         total_data = torch.concat([total_data, data])
+    #         data_size += data.size()[0]
+    #     return total_data[:nsamples]
     

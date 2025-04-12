@@ -117,6 +117,7 @@ class TrainingManager:
 
         while self.epochs < total_epochs:
             epoch_loss = steps = 0
+            epoch_score_loss = 0
             for i, Xbatch in enumerate(tqdm(self.data) if progress else self.data):
                 if max_batch_per_epoch is not None:
                     if i >= max_batch_per_epoch:
@@ -128,6 +129,7 @@ class TrainingManager:
                 
                 training_results = self.method.training_losses(self.models, Xbatch, **kwargs)
                 loss = training_results['loss']
+                score_loss = training_results['score_loss']
                 # check if nan in loss
                 if torch.isnan(loss):
                     print('nan in loss detected. Saving training_results and breaking loop...')
@@ -160,12 +162,15 @@ class TrainingManager:
                             e[name].update(self.models[name])
                 
                 epoch_loss += loss.item()
+                epoch_score_loss += score_loss.item()
                 steps += 1
                 self.total_steps += 1
                 if batch_callback is not None:
                     batch_callback(loss.item())
             epoch_loss = epoch_loss / steps
+            epoch_score_loss = epoch_score_loss / steps
             print('epoch_loss', epoch_loss)
+            print('epoch_score_loss', epoch_score_loss)
             self.epochs += 1
             if epoch_callback is not None:
                 epoch_callback(epoch_loss,models=self.models)
@@ -182,9 +187,7 @@ class TrainingManager:
             
             # now potentially eval
             if (eval_freq is not None) and  (self.epochs % eval_freq) == 0:
-                self.evaluate()
-                if not no_ema_eval:
-                    self.evaluate(evaluate_emas=True)
+                self.evaluate(evaluate_emas= not no_ema_eval)
 
 
     def evaluate(self, evaluate_emas = False, **kwargs):

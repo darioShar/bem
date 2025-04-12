@@ -1,0 +1,84 @@
+seed: null
+
+data:
+  dataset: gmm_2     # gaussian mixture grid
+  d: 8                  # data dimension
+  n: 4                  # n*n mixture components
+  
+  n_samples: 40000      # number of samples in the dataset
+  std: 0.1
+  theta: 2.0
+  weights:
+  # - 0.01
+  # - 0.99
+  - 0.01
+  - 0.1
+  - 0.3
+  - 0.2
+  - 0.02
+  - 0.15
+  - 0.02
+  - 0.15
+  - 0.05
+
+method: diffusion
+
+diffusion:
+  T: 1.0
+  process_type: VP # VE or VP
+  schedule: cosine
+  rescale_timesteps: true # rescale the timesteps to [0, 1]
+  
+  learn_variance: false # learn the variance
+  conditional: false # conditional diffusion
+
+eval:
+  data_to_generate: 50000
+  real_data: 50000
+  batch_size: 4096 
+
+  diffusion:
+    epsilon: 0.0001
+    deterministic: false # set to true for ode sampling
+    reverse_steps: 100
+    clip_denoised: false # clip denoised data to [0, 1]
+
+
+model:
+  architecture: 'mlp'
+  mlp:
+    act: silu
+    dropout_rate: 0.0
+    layer_norm: true
+    nblocks: 2
+    nunits: 32
+    skip_connection: true
+    time_emb_size: 32
+
+
+training:
+  batch_size: 4096
+  num_workers: 0
+
+  diffusion:
+    refresh_data: false # resample the dataset at each epoch. Dataset object must implement refresh method 
+
+    ema_rates:
+    #- 0.9
+    grad_clip: null #1.0
+
+optim:
+  optimizer: adamw
+  schedule: null # linear, steplr
+  lr: 0.005
+  warmup: 0 #1000
+  lr_steps: 2000
+  lr_step_size: 400
+  lr_gamma: 0.99
+
+run:
+  epochs: 20
+  eval_freq: null
+  checkpoint_freq: null
+  progress: false # print progress bar
+

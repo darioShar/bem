@@ -66,7 +66,7 @@ def initialize_experiment(p):
         eval_name=None,
     )
     # for custom checkpoint name:
-    # file_handler.exp_hash = lambda p : ...
+    # file_handler.exp_name = lambda p : ...
     # file_handler.eval_name = lambda p : ...
 
     gen_data_path, real_data_path = file_handler.prepare_data_directories(
@@ -103,12 +103,14 @@ def initialize_experiment(p):
             method=method,
             gen_manager=gen_manager,
             dataloader=data, # or test_data
+            test_dataloader=test_data,
             verbose=True, 
             logger = logger,
             data_to_generate = p['eval']['data_to_generate'],
             batch_size = p['eval']['batch_size'],
             modality = modality,
             state_space = state_space,
+            has_labels=has_labels,
             gen_data_path=gen_data_path,
             real_data_path=real_data_path
     )
@@ -288,41 +290,7 @@ def update_parameters_before_loading(p, args):
         if args.vae_latent_dim is not None:
             p['model']['vae']['latent_dim'] = args.vae_latent_dim
 
-    # DMPM
-    if args.Tf is not None:
-        p['dmpm']['Tf'] = args.Tf
-
-    if args.lambda_ is not None:  # Use `lambda_` because `lambda` is a reserved keyword in Python
-        p['dmpm']['lambda_'] = args.lambda_
-        
-    if args.sampling is not None:
-        p['eval']['dmpm']['sampling_algorithm'] = args.sampling
-
-    if args.schedule is not None:
-        p['eval']['dmpm']['schedule'] = args.schedule
-        
-    if args.inner_loop_schedule is not None:
-        p['eval']['dmpm']['inner_loop_schedule'] = args.inner_loop_schedule
-
-    # Training, DMPM
-    if args.gamma is not None:
-        p['training']['dmpm']['divide_by_gamma'] = args.gamma
-
-    if args.mu is not None:
-        p['training']['dmpm']['mu'] = args.mu
-
-    if args.zeta is not None:
-        p['training']['dmpm']['zeta'] = args.zeta
-
-    if args.eta is not None:
-        p['training']['dmpm']['eta'] = args.eta
-        
     
-    # dfm
-    if args.dfm_corrector is not None:
-        p['eval']['dfm']['corrector_sampler'] = True
-        p['eval']['dfm']['adaptative'] = True
-
     return p
 
 
@@ -381,7 +349,7 @@ def additional_logging(
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # processes to choose from. Either diffusion, pdmp, or 'nf' to use a normal normalizing flow.
+    # method to choose used
     parser.add_argument("--method", help='generative method to use', default=None, type=str)
 
     # EXPERIMENT parameters, specific to TRAINING
@@ -451,29 +419,6 @@ def parse_args():
     parser.add_argument('--num_layers', help='Set number of transformer layers', default=None, type=int)
     parser.add_argument('--dim_feedforward', help='Set feedforward dimension in transformer', default=None, type=int)
     parser.add_argument('--transformer_dropout', help='Set dropout rate for transformer', default=None, type=float)
-
-    # vae
-    parser.add_argument('--vae_nunits', help='', default=None, type=int)
-    parser.add_argument('--vae_nblocks', help='', default=None, type=int)
-    parser.add_argument('--vae_latent_dim', help='', default=None, type=int)
-    
-    # DMPM
-    parser.add_argument('--Tf', help='Set time horizon', default=None, type=float)
-    parser.add_argument('--lambda_', help='Set intensity factor lambda', default=None, type=float)
-    
-    parser.add_argument('--sampling', help='choose sampling algorithm (default, denoise_renoise)', default=None, type=str)
-    parser.add_argument('--schedule', help='set schedule for sampling at evaluation', default=None, type=str)
-    parser.add_argument('--inner_loop_schedule', help='set inner loop schedule for sampling at evaluation', default=None, type=str)
-
-    # DMPM, LOSS
-    parser.add_argument('--gamma', help='Divide loss by gamma_t', default=None, action='store_true')
-    parser.add_argument('--mu', help='Set mu in loss', default=None, type=float)
-    parser.add_argument('--zeta', help='Set zeta in loss', default=None, type=float)
-    parser.add_argument('--eta', help='Set eta in loss', default=None, type=float)
-    
-    
-    # dfm
-    parser.add_argument('--dfm_corrector', help='activate adaptative corrector sampler', default=None, action='store_true')
     
     
     # PARSE AND RETURN
